@@ -61,7 +61,7 @@
 
         // Initialize Firebase
         const app = firebase.initializeApp(firebaseConfig);
-        const analytics = getAnalytics(app);
+        const analytics = firebase.getAnalytics(app);
 
         // FirebaseUI config
         const uiConfig = {
