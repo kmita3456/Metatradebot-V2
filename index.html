@@ -1,126 +1,274 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Forex Signals</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forex Signals Tool</title>
+    
+    <!-- Firebase SDK (compat версии) -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    
+    <!-- FirebaseUI для входа -->
+    <script src="https://www.gstatic.com/firebasejs/ui/6.0.1/firebase-ui-auth.js"></script>
+    <link type="text/css" rel="stylesheet" href="https://www.gstatic.com/firebasejs/ui/6.0.1/firebase-ui-auth.css" />
+    
     <style>
-        #auth-container, #app { max-width: 600px; margin: auto; }
-        table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid #ddd; padding: 8px; }
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 0 15px;
+        }
+        #auth-container, #app-container {
+            display: none;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 8px 12px;
+            text-align: center;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .settings-panel {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+        }
+        .settings-panel label {
+            display: inline-block;
+            width: 220px;
+            margin: 5px 0;
+        }
+        .settings-panel input, .settings-panel select {
+            padding: 5px;
+            width: 200px;
+        }
+        button {
+            padding: 8px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .low-confidence {
+            color: orange;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
+    <!-- Экран входа -->
     <div id="auth-container">
-        <h2>Please sign in</h2>
+        <h2>Войдите для доступа к сигналам</h2>
         <div id="firebaseui-auth-container"></div>
     </div>
-    <div id="app" style="display:none;">
-        <h2>Forex Signals Control Panel</h2>
-        <div>
-            <label>Currency pairs (comma separated):</label>
-            <input type="text" id="pairs" value="EURUSD,GBPUSD"><br>
-            <label>Timeframes (comma separated, e.g. M5,M15):</label>
-            <input type="text" id="timeframes" value="M5,M15"><br>
-            <label>Search duration (minutes):</label>
-            <input type="number" id="duration" value="5" min="1" max="60"><br>
-            <label>Accuracy mode:</label>
-            <select id="accuracy">
-                <option value="strict">Strict</option>
-                <option value="balanced" selected>Balanced</option>
-                <option value="loose">Loose</option>
-            </select><br>
-            <label><input type="checkbox" id="origMode"> Use original strict filters</label><br>
-            <button onclick="applySettings()">Apply & Start Analysis</button>
+
+    <!-- Основной интерфейс (после входа) -->
+    <div id="app-container">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2>Панель управления торговыми сигналами</h2>
+            <button onclick="signOut()">Выйти</button>
         </div>
-        <hr>
-        <h3>Recent Signals</h3>
+        
+        <!-- Блок настроек -->
+        <div class="settings-panel">
+            <h3>Настройки анализа</h3>
+            <div>
+                <label>Валютные пары (через запятую):</label>
+                <input type="text" id="pairs" value="EURUSD,GBPUSD">
+            </div>
+            <div>
+                <label>Таймфреймы (через запятую):</label>
+                <input type="text" id="timeframes" value="M5,M15">
+            </div>
+            <div>
+                <label>Длительность поиска (мин):</label>
+                <input type="number" id="duration" value="5" min="1" max="60">
+            </div>
+            <div>
+                <label>Режим точности:</label>
+                <select id="accuracy">
+                    <option value="strict">Строгий</option>
+                    <option value="balanced" selected>Сбалансированный</option>
+                    <option value="loose">Свободный</option>
+                </select>
+            </div>
+            <div>
+                <label><input type="checkbox" id="origMode"> Использовать исходные жёсткие фильтры</label>
+            </div>
+            <button onclick="applySettings()">Применить и запустить анализ</button>
+            <p style="font-size: 0.9em; color: gray;">При нажатии настройки сохранятся и бот начнёт новый цикл анализа.</p>
+        </div>
+
+        <!-- Таблица сигналов -->
+        <h3>Последние сигналы</h3>
         <table id="signals-table">
-            <thead><tr><th>Symbol</th><th>TF</th><th>Direction</th><th>Confidence</th><th>Entry</th><th>Hold</th></tr></thead>
+            <thead>
+                <tr>
+                    <th>Символ</th>
+                    <th>Таймфрейм</th>
+                    <th>Направление</th>
+                    <th>Уверенность</th>
+                    <th>Цена входа</th>
+                    <th>Время удержания</th>
+                    <th>Пояснение</th>
+                </tr>
+            </thead>
             <tbody></tbody>
         </table>
     </div>
 
-    <!-- FirebaseUI (for email/password) -->
-    <script src="https://www.gstatic.com/firebasejs/ui/6.0.1/firebase-ui-auth.js"></script>
-    <link type="text/css" rel="stylesheet" href="https://www.gstatic.com/firebasejs/ui/6.0.1/firebase-ui-auth.css" />
-
     <script>
-        // Your Firebase configuration
+        // ===================== 1. Конфигурация Firebase =====================
+        // Ваши реальные данные
         const firebaseConfig = {
-        apiKey: "AIzaSyBC3T8v5JWrjIeP9NnP_WI9uxEb4nx-MQk",
-        authDomain: "metatradebot-v2.firebaseapp.com",
-        projectId: "metatradebot-v2",
-        storageBucket: "metatradebot-v2.firebasestorage.app",
-        messagingSenderId: "509747826698",
-        appId: "1:509747826698:web:001e8adf3ec3d33e530ff3",
-        measurementId: "G-KW58SKXLKJ"
-};
+            apiKey: "AIzaSyBC3T8v5JWrjIeP9NnP_WI9uxEb4nx-MQk",
+            authDomain: "metatradebot-v2.firebaseapp.com",
+            projectId: "metatradebot-v2",
+            storageBucket: "metatradebot-v2.firebasestorage.app",
+            messagingSenderId: "509747826698",
+            appId: "1:509747826698:web:001e8adf3ec3d33e530ff3",
+            measurementId: "G-KW58SKXLKJ"  // не обязателен для compat, но оставим
+        };
 
-        // Initialize Firebase
-        const app = firebase.initializeApp(firebaseConfig);
-        const analytics = firebase.getAnalytics(app);
+        // Инициализация Firebase (compat-стиль)
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
 
-        // FirebaseUI config
+        // ===================== 2. Аутентификация через FirebaseUI =====================
         const uiConfig = {
-            signInSuccessUrl: '/',
+            callbacks: {
+                signInSuccessWithAuthResult: (authResult) => {
+                    // Не перенаправляем, обработчик onAuthStateChanged сам покажет интерфейс
+                    return false;
+                }
+            },
+            signInFlow: 'popup',
             signInOptions: [
                 firebase.auth.EmailAuthProvider.PROVIDER_ID
-            ]
+            ],
+            credentialHelper: firebaseui.auth.CredentialHelper.NONE
         };
+
         const ui = new firebaseui.auth.AuthUI(auth);
         ui.start('#firebaseui-auth-container', uiConfig);
 
+        // Следим за состоянием авторизации
         auth.onAuthStateChanged(user => {
             if (user) {
+                // Пользователь вошёл – показываем приложение
                 document.getElementById('auth-container').style.display = 'none';
-                document.getElementById('app').style.display = 'block';
-                loadSignals();
+                document.getElementById('app-container').style.display = 'block';
+                loadCurrentSettings();  // загрузить сохранённые настройки
+                loadSignals();          // начать отображение сигналов в реальном времени
             } else {
+                // Пользователь вышел – показываем форму входа
                 document.getElementById('auth-container').style.display = 'block';
-                document.getElementById('app').style.display = 'none';
+                document.getElementById('app-container').style.display = 'none';
             }
         });
 
+        // Кнопка выхода
+        function signOut() {
+            auth.signOut();
+        }
+
+        // ===================== 3. Чтение сигналов из Firestore =====================
         function loadSignals() {
-            db.collection('signals').orderBy('timestamp', 'desc').limit(20)
+            db.collection('signals')
+                .orderBy('timestamp', 'desc')
+                .limit(30)
                 .onSnapshot(snapshot => {
                     const tbody = document.querySelector('#signals-table tbody');
                     tbody.innerHTML = '';
                     snapshot.forEach(doc => {
                         const s = doc.data();
-                        tbody.innerHTML += `<tr>
+                        const row = document.createElement('tr');
+                        let confidenceClass = '';
+                        if (s.confidence < 70) confidenceClass = 'low-confidence';
+                        row.innerHTML = `
                             <td>${s.symbol}</td>
                             <td>${s.timeframe}</td>
-                            <td>${s.direction}</td>
-                            <td>${s.confidence}%</td>
-                            <td>${s.entry_price.toFixed(5)}</td>
-                            <td>${s.hold_time_minutes}m</td>
-                        </tr>`;
+                            <td>${s.direction === 'UP' ? '▲ BUY' : '▼ SELL'}</td>
+                            <td class="${confidenceClass}">${s.confidence}%</td>
+                            <td>${s.entry_price ? s.entry_price.toFixed(5) : '—'}</td>
+                            <td>${s.hold_time_minutes} мин</td>
+                            <td style="font-size:0.9em; max-width:200px;">${s.explanation || ''}</td>
+                        `;
+                        tbody.appendChild(row);
                     });
+                }, error => {
+                    console.error('Ошибка чтения сигналов:', error);
                 });
         }
 
+        // ===================== 4. Управление настройками =====================
+        // Загружаем текущие настройки из Firestore и заполняем поля
+        function loadCurrentSettings() {
+            db.collection('settings').doc('user_settings').get()
+                .then(doc => {
+                    if (doc.exists) {
+                        const data = doc.data();
+                        if (data.pairs) {
+                            document.getElementById('pairs').value = data.pairs.join(',');
+                        }
+                        if (data.timeframes) {
+                            document.getElementById('timeframes').value = data.timeframes.join(',');
+                        }
+                        if (data.search_duration_minutes !== undefined) {
+                            document.getElementById('duration').value = data.search_duration_minutes;
+                        }
+                        if (data.accuracy_mode) {
+                            document.getElementById('accuracy').value = data.accuracy_mode;
+                        }
+                        if (data.run_current_mode !== undefined) {
+                            document.getElementById('origMode').checked = data.run_current_mode;
+                        }
+                    }
+                })
+                .catch(error => console.error('Ошибка загрузки настроек:', error));
+        }
+
+        // Сохраняем новые настройки в Firestore
         function applySettings() {
-            const pairs = document.getElementById('pairs').value.split(',').map(p => p.trim());
-            const timeframes = document.getElementById('timeframes').value.split(',').map(t => t.trim());
-            const duration = parseInt(document.getElementById('duration').value);
+            const pairsInput = document.getElementById('pairs').value.trim();
+            const timeframesInput = document.getElementById('timeframes').value.trim();
+            const pairs = pairsInput ? pairsInput.split(',').map(p => p.trim()) : ['EURUSD'];
+            const timeframes = timeframesInput ? timeframesInput.split(',').map(t => t.trim()) : ['M5', 'M15'];
+            const duration = parseInt(document.getElementById('duration').value) || 5;
             const accuracy = document.getElementById('accuracy').value;
             const origMode = document.getElementById('origMode').checked;
 
-            db.collection('settings').doc('user_settings').set({
+            const settings = {
                 pairs: pairs,
                 timeframes: timeframes,
                 search_duration_minutes: duration,
                 accuracy_mode: accuracy,
                 run_current_mode: origMode
-            }).then(() => {
-                alert('Settings saved. Bot will restart analysis.');
-            }).catch(error => {
-                alert('Error: ' + error.message);
-            });
+            };
+
+            db.collection('settings').doc('user_settings').set(settings)
+                .then(() => {
+                    alert('Настройки сохранены. Бот запустит новый цикл анализа.');
+                })
+                .catch(error => {
+                    alert('Ошибка сохранения: ' + error.message);
+                });
         }
     </script>
 </body>
