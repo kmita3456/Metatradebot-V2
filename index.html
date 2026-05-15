@@ -50,16 +50,18 @@
     <script>
         // Your Firebase configuration
         const firebaseConfig = {
-            apiKey: "AIzaSy...",
-            authDomain: "your-project.firebaseapp.com",
-            projectId: "your-project",
-            storageBucket: "your-project.appspot.com",
-            messagingSenderId: "...",
-            appId: "..."
-        };
-        firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
-        const db = firebase.firestore();
+        apiKey: "AIzaSyBC3T8v5JWrjIeP9NnP_WI9uxEb4nx-MQk",
+        authDomain: "metatradebot-v2.firebaseapp.com",
+        projectId: "metatradebot-v2",
+        storageBucket: "metatradebot-v2.firebasestorage.app",
+        messagingSenderId: "509747826698",
+        appId: "1:509747826698:web:001e8adf3ec3d33e530ff3",
+        measurementId: "G-KW58SKXLKJ"
+};
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
 
         // FirebaseUI config
         const uiConfig = {
