@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Forex Signals</title>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <style>
+        #auth-container, #app { max-width: 600px; margin: auto; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; }
+    </style>
+</head>
+<body>
+    <div id="auth-container">
+        <h2>Please sign in</h2>
+        <div id="firebaseui-auth-container"></div>
+    </div>
+    <div id="app" style="display:none;">
+        <h2>Forex Signals Control Panel</h2>
+        <div>
+            <label>Currency pairs (comma separated):</label>
+            <input type="text" id="pairs" value="EURUSD,GBPUSD"><br>
+            <label>Timeframes (comma separated, e.g. M5,M15):</label>
+            <input type="text" id="timeframes" value="M5,M15"><br>
+            <label>Search duration (minutes):</label>
+            <input type="number" id="duration" value="5" min="1" max="60"><br>
+            <label>Accuracy mode:</label>
+            <select id="accuracy">
+                <option value="strict">Strict</option>
+                <option value="balanced" selected>Balanced</option>
+                <option value="loose">Loose</option>
+            </select><br>
+            <label><input type="checkbox" id="origMode"> Use original strict filters</label><br>
+            <button onclick="applySettings()">Apply & Start Analysis</button>
+        </div>
+        <hr>
+        <h3>Recent Signals</h3>
+        <table id="signals-table">
+            <thead><tr><th>Symbol</th><th>TF</th><th>Direction</th><th>Confidence</th><th>Entry</th><th>Hold</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <!-- FirebaseUI (for email/password) -->
+    <script src="https://www.gstatic.com/firebasejs/ui/6.0.1/firebase-ui-auth.js"></script>
+    <link type="text/css" rel="stylesheet" href="https://www.gstatic.com/firebasejs/ui/6.0.1/firebase-ui-auth.css" />
+
+    <script>
+        // Your Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSy...",
+            authDomain: "your-project.firebaseapp.com",
+            projectId: "your-project",
+            storageBucket: "your-project.appspot.com",
+            messagingSenderId: "...",
+            appId: "..."
+        };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        // FirebaseUI config
+        const uiConfig = {
+            signInSuccessUrl: '/',
+            signInOptions: [
+                firebase.auth.EmailAuthProvider.PROVIDER_ID
+            ]
+        };
+        const ui = new firebaseui.auth.AuthUI(auth);
+        ui.start('#firebaseui-auth-container', uiConfig);
+
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                document.getElementById('auth-container').style.display = 'none';
+                document.getElementById('app').style.display = 'block';
+                loadSignals();
+            } else {
+                document.getElementById('auth-container').style.display = 'block';
+                document.getElementById('app').style.display = 'none';
+            }
+        });
+
+        function loadSignals() {
+            db.collection('signals').orderBy('timestamp', 'desc').limit(20)
+                .onSnapshot(snapshot => {
+                    const tbody = document.querySelector('#signals-table tbody');
+                    tbody.innerHTML = '';
+                    snapshot.forEach(doc => {
+                        const s = doc.data();
+                        tbody.innerHTML += `<tr>
+                            <td>${s.symbol}</td>
+                            <td>${s.timeframe}</td>
+                            <td>${s.direction}</td>
+                            <td>${s.confidence}%</td>
+                            <td>${s.entry_price.toFixed(5)}</td>
+                            <td>${s.hold_time_minutes}m</td>
+                        </tr>`;
+                    });
+                });
+        }
+
+        function applySettings() {
+            const pairs = document.getElementById('pairs').value.split(',').map(p => p.trim());
+            const timeframes = document.getElementById('timeframes').value.split(',').map(t => t.trim());
+            const duration = parseInt(document.getElementById('duration').value);
+            const accuracy = document.getElementById('accuracy').value;
+            const origMode = document.getElementById('origMode').checked;
+
+            db.collection('settings').doc('user_settings').set({
+                pairs: pairs,
+                timeframes: timeframes,
+                search_duration_minutes: duration,
+                accuracy_mode: accuracy,
+                run_current_mode: origMode
+            }).then(() => {
+                alert('Settings saved. Bot will restart analysis.');
+            }).catch(error => {
+                alert('Error: ' + error.message);
+            });
+        }
+    </script>
+</body>
+</html>
